@@ -1,2 +1,2 @@
 # labyrinth
-the labyrinth (hard) challenge on codingame.com
+work-in-progress solution for an online maze challenge
