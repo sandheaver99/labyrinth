@@ -16,7 +16,9 @@ class Player
 	
 	private List<Node> maze = new ArrayList<Node>();
 	private Node startingPosition;
+	private Node currentPosition;
 	private Node controlRoom;
+	private Node target;
 	private boolean controlVisited = false;
 
     public static void main(String args[])
@@ -37,6 +39,8 @@ class Player
         columns = in.nextInt(); // number of columns.
         alarmDelay = in.nextInt(); // number of rounds between the time the alarm countdown is activated and the time the alarm goes off.
 			
+		System.err.println("Number of nodes in maze is " + (rows * columns));
+		
 		//instantiate initial grid of nodes, setting all nodes to 'not scanned' type
 		for(int row = 0; row < rows; row++)
 		{
@@ -107,7 +111,7 @@ class Player
 		{
 			//if this is the first turn, set the starting point to the node at the current location of Kirk. 
 			//this is double checked within the row update loop below, by checking for type "T".
-			startingPosition = maze.get((currentY * currentX) + currentX);
+			startingPosition = maze.get((currentY * columns) + currentX);
 		}
 		
 		int mazeIndex = 0;
@@ -133,12 +137,124 @@ class Player
 				maze.get(mazeIndex).setType(c);
 				mazeIndex++;
 			}				
-    }
+        }
+		// find current node
+        currentPosition = maze.get((currentY * columns) + currentX);
+        System.err.println("My calculated current position is [" + currentPosition.getX() + "," + currentPosition.getY() + "]");
 	}
 	
 	private void chooseTarget()
 	{
+		//if control is visited, target = entry and path is known and accessible
+		if(controlVisited)
+		{
+			target= startingPosition;
+			return;
+		}
+		
+		//if control is not visited but already the target, we make no change to the target. 
+		else if(controlRoom != null) 
+		{
+			if(target.equals(controlRoom))
+			{
+				return;
+			}
+		}
+		
+		/*
+		 * if we reach this point then the control room has not been found in previous turns and evaluated, so we must
+		 * in any event flood the maze to establish the accessibility of every known node, even if the control room
+		 * is known on this turn, since in any event, we will be updating the target.  
+		 * 
+		 */
+		 
+		System.err.println("Beginning maze flood routine ...");
+		floodMaze();
+		System.err.println("Maze flood routine completed");
+		
+		//If control is known (and accessible), target = control
+		if(controlRoom != null) 
+		{
+			if(controlRoom.isFlooded())
+			{
+				target = controlRoom;
+			}
+		}
+		
+		/*
+		 * otherwise, target = 'center' of unknown area 
+		 * each unknown tile will have an x and y so can take avg of these (N) , 
+		 * & search around this point for accessible (flooded) Node (N/?)
+		 * 
+		 */
+		 
+		 else
+		 {
+			 System.err.println("Searching for furthest known node ....");
+			 target = findFurthestKnownNode();
+			 System.err.println("Search completed");
+		 }
+		 
+		 System.err.println("Target is [" + target.getX() + "," + target.getY() + "] and is of type " + target.getType());
+		 System.err.println("Target is flooded? : " + target.isFlooded());
+	}		
+	
+	
+	private void floodMaze()
+	{
+		//recursive implementation of floodfill (within the Node class) can be used if maze has small number of nodes
+		if(maze.size() < 1000)
+		{
+			currentPosition.flood();
+		}
+		
+		//otherwise use non-recursive stack algorithm to floodfill
+		else
+		{
+			currentPosition.setFlooded(true);
+			Stack<Node> floodStack = new Stack<Node>();
+			floodStack.push(currentPosition);
+			
+			while(floodStack.size() > 0)
+			{
+				Node n = floodStack.pop();
+				for(Node edge: n.getNeighbours())
+				{
+					if(!edge.isFlooded() && !n.getType().equals("#"))
+					{
+						edge.setFlooded(true);
+						floodStack.push(edge);
+					}
+				}
+			}					
+		}		
+	}	
+	
+	private Node findFurthestKnownNode() //from startingPoint
+	{			
+		Node furthest = currentPosition;
+		int largestManhatten = 0;
+		
+		for(Node n: maze)
+		{
+			String type = n.getType();
+			if(!type.equals("?") && !type.equals("#") && n.isFlooded())
+			{
+				int manhattenX = Math.abs(n.getX() - startingPosition.getX());
+				int manhattenY = Math.abs(n.getY() - startingPosition.getY());
+				int manhatten = manhattenX + manhattenY;
+				if(manhatten > largestManhatten)
+				{
+					largestManhatten = manhatten;
+					furthest = n;
+				}
+			}
+		}		
+				
+		return furthest;
 	}
+			
+		
 }
 
 class Node implements Comparable<Node>
@@ -173,6 +289,25 @@ class Node implements Comparable<Node>
 		this.x = x;
 		this.y = y;
 		this.id = id;
+	}
+	
+	public void flood()
+	{
+		/*
+		 * recursive implementation of floodfill routine, 
+		 * but not used due to potential stack overflow errors
+		 * (up to 20,000 nodes are possible in the problem and
+		 * therefore up to 20,000 recursive calls would be made		 * 
+		 */
+		 
+		 flooded = true;
+		 for(Node n: neighbours)
+		 {
+			 if(!n.isFlooded() && !n.getType().equals("#"))
+			 {
+				 n.flood();
+			 }
+		 }
 	}
 	
 	//getters for final instance variables		
