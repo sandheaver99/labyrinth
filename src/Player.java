@@ -14,7 +14,7 @@ class Player
 	private int currentY;
 	private int turnNumber = 0;
 	
-	private List<Node> maze = new ArrayList<Node>();
+	private List<Node> maze = new ArrayList<Node>();		
 	private Node startingPosition;
 	private Node currentPosition;
 	private Node controlRoom;
@@ -97,9 +97,10 @@ class Player
 			turnNumber++;
             readMaze();
             chooseTarget();
-                       
-
-            System.out.println("RIGHT"); // Kirk's next move (UP DOWN LEFT or RIGHT).
+            List<Node> path = findShortestPath();
+            String message = getMessage(path.get(0));
+            System.out.println(message); // Kirk's next move (UP DOWN LEFT or RIGHT).
+            drain();
         }
     }
     
@@ -141,10 +142,18 @@ class Player
 		// find current node
         currentPosition = maze.get((currentY * columns) + currentX);
         System.err.println("My calculated current position is [" + currentPosition.getX() + "," + currentPosition.getY() + "]");
+        if(currentPosition.getType().equals("C"))
+        {
+			controlVisited = true;
+		}
 	}
 	
 	private void chooseTarget()
 	{
+		System.err.println("Beginning maze flood routine ...");
+		floodMaze();
+		System.err.println("Maze flood routine completed");
+		
 		//if control is visited, target = entry and path is known and accessible
 		if(controlVisited)
 		{
@@ -168,9 +177,7 @@ class Player
 		 * 
 		 */
 		 
-		System.err.println("Beginning maze flood routine ...");
-		floodMaze();
-		System.err.println("Maze flood routine completed");
+		
 		
 		//If control is known (and accessible), target = control
 		if(controlRoom != null) 
@@ -253,7 +260,149 @@ class Player
 				
 		return furthest;
 	}
+	
+	private List<Node> findShortestPath()
+	{
+		/* 
+		 * uses A* algorithm to find shortest path from current position to target
+		 * (a route is assumed to exist because target is flooded,
+		 *  although "?" may decieve)
+		 */
+		
+		List<Node> open = new ArrayList<Node>();
+		List<Node> closed = new ArrayList<Node>();
+		
+		// Add the starting square (or node) to the open list.
+		
+		open.add(currentPosition); 
+		
+		while(open.size() > 0) 
+		{
+			/*
+			 * Look for the lowest F cost square on the open list. 
+			 * We refer to this as the subjectNode.
+			 */
+			 
+			Node subjectNode = open.get(0); 
 			
+			// Switch it to the closed list.
+			
+			open.remove(subjectNode);
+			closed.add(subjectNode);
+			
+			//Stop when you: Add the target square to the closed list, in which case the path has been found 
+			if(subjectNode.equals(target))
+			{
+				break;
+			}
+			
+			//For each of the 4 nodes adjacent (NSEW) to this subject node …
+			
+			for(Node neighbour: subjectNode.getNeighbours())
+			{
+				//If it is not walkable or if it is on the closed list, ignore it. 
+				 
+				if(neighbour.isFlooded() && !closed.contains(neighbour))
+				{
+					// Otherwise do the following.
+					//If it isn’t on the open list, add it to the open list.
+					if(!open.contains(neighbour))
+					{
+						open.add(neighbour);
+						//Make the subject node the parent of this neighbouring node
+						neighbour.setParent(subjectNode);
+						//Record the F, G, and H costs of the square. 
+						int h = neighbour.calcHCost(target);
+						neighbour.setHValue(h);
+						neighbour.setGCost(subjectNode.getGCost() + neighbour.getBaseCost());
+						neighbour.setFValue();
+					}
+					
+					//If it is on the open list already, 
+					else
+					{
+						/*
+						 * check to see if this path to that node is better,
+						 * using G cost as the measure. A lower G cost means that this is a better path.
+						 * 
+						 */
+						 if((subjectNode.getGCost() + neighbour.getBaseCost()) < neighbour.getGCost())
+						 {
+							 /*
+							  * If so, change the parent of the neighbour to the subjectNode,
+							  * and recalculate the G and F scores of the node.
+							  * If keeping your open list sorted by F score,
+							  * resort the list to account for the change.
+							  */
+							  neighbour.setParent(subjectNode);
+							  neighbour.setGCost(subjectNode.getGCost() + neighbour.getBaseCost());
+							  neighbour.setFValue();
+						 }							  
+					}
+						 
+				}				
+			}
+			//sort by shortest FValue
+			Collections.sort(open);
+		}	
+		if(!closed.contains(target))
+		{
+			System.err.println("Cannot find a path to the target square");
+		}
+		
+		/*
+		 * Save the path. Working backwards from the target node, go from each node to
+		 * its parent node until you reach the current position. That is your path. 
+		 */
+		 List<Node> shortestPath = new ArrayList<Node>();		 
+		 shortestPath.add(target);
+		 while(!shortestPath.contains(currentPosition))
+		 {
+			//get the parent of the last item added to the shortestPath and add it to the shortestPath
+			 shortestPath.add(shortestPath.get(shortestPath.size()-1).getParent());
+		 }
+		 //reverse the path
+		 Collections.reverse(shortestPath);
+		 //remove the current position, which will now be at the start of the list
+		 shortestPath.remove(currentPosition);
+		 
+		 System.err.println("My shortest path to the target is: ");
+		 for(Node n:shortestPath)
+		 {
+			System.err.print("[" + n.getX() + ", " + n.getY() + "], ");			 
+		 }
+		 System.err.println("");	
+		 
+		 return shortestPath;	  					
+	}
+	
+	private String getMessage(Node next)
+	{
+		int delta = next.getId() - currentPosition.getId();
+		switch(delta)
+		{
+			case -1: return "LEFT";
+			case  1: return "RIGHT";
+			default: if(delta > 0)
+			{
+				return "DOWN";
+			}
+			else
+			{
+				return "UP";
+			}
+		}
+	}
+	
+	private void drain()
+	{
+		for(Node n: maze)
+		{
+			n.setFlooded(false);
+		}
+	}
+			
+	
 		
 }
 
@@ -368,9 +517,9 @@ class Node implements Comparable<Node>
 		type = t;
 	}
 	
-	public void setFValue(int f)
+	public void setFValue()
 	{
-		fValue = f;
+		fValue = getGCost() + getHValue();
 	}
 	
 	public void setGCost(int g)
@@ -410,4 +559,12 @@ class Node implements Comparable<Node>
     {
         return fValue > n.getFValue() ? +1 : fValue < n.getFValue() ? -1 : 0;        
     }
+    
+    public int calcHCost (Node target)
+    {
+		//calculate manhatten costs
+		int manX = Math.abs(getX() - target.getX());
+		int manY = Math.abs(getX() - target.getX());
+		return manX + manY;
+	}		
 }
