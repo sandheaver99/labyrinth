@@ -97,6 +97,10 @@ class Player
 			turnNumber++;
             readMaze();
             chooseTarget();
+            
+            System.err.println("Target is [" + target.getX() + "," + target.getY() + "] and is of type " + target.getType());
+			System.err.println("Target is flooded? : " + target.isFlooded());
+		 
             List<Node> path = findShortestPath();
             String message = getMessage(path.get(0));
             System.out.println(message); // Kirk's next move (UP DOWN LEFT or RIGHT).
@@ -146,6 +150,7 @@ class Player
         {
 			controlVisited = true;
 		}
+		currentPosition.setVisited(true);
 	}
 	
 	private void chooseTarget()
@@ -161,49 +166,38 @@ class Player
 			return;
 		}
 		
-		//if control is not visited but already the target, we make no change to the target. 
+		//if control is not visited but already the target, we make no change to the target, otherwise if control room is known and accessible, we make it the target. 
 		else if(controlRoom != null) 
 		{
 			if(target.equals(controlRoom))
 			{
 				return;
 			}
-		}
-		
-		/*
-		 * if we reach this point then the control room has not been found in previous turns and evaluated, so we must
-		 * in any event flood the maze to establish the accessibility of every known node, even if the control room
-		 * is known on this turn, since in any event, we will be updating the target.  
-		 * 
-		 */
-		 
-		
-		
-		//If control is known (and accessible), target = control
-		if(controlRoom != null) 
-		{
-			if(controlRoom.isFlooded())
+			else if(controlRoom.isFlooded())
 			{
 				target = controlRoom;
+				return;
 			}
-		}
-		
-		/*
-		 * otherwise, target = 'center' of unknown area 
-		 * each unknown tile will have an x and y so can take avg of these (N) , 
-		 * & search around this point for accessible (flooded) Node (N/?)
-		 * 
-		 */
-		 
-		 else
-		 {
-			 System.err.println("Searching for furthest known node ....");
-			 target = findFurthestKnownNode();
-			 System.err.println("Search completed");
-		 }
-		 
-		 System.err.println("Target is [" + target.getX() + "," + target.getY() + "] and is of type " + target.getType());
-		 System.err.println("Target is flooded? : " + target.isFlooded());
+			/*
+			 * otherwise, target = furthest known, unvisited area 
+			 * 
+			 */
+			 
+			 else
+			 {
+				 System.err.println("Searching for furthest known, unvisited node ....");
+				 target = findFurthestKnownNode();
+				 System.err.println("Search completed");
+				 return;
+			 }
+		} 
+		else
+			 {
+				 System.err.println("Searching for furthest known, unvisited node ....");
+				 target = findFurthestKnownNode();
+				 System.err.println("Search completed");
+				 return;
+			 }
 	}		
 	
 	
@@ -227,7 +221,8 @@ class Player
 				Node n = floodStack.pop();
 				for(Node edge: n.getNeighbours())
 				{
-					if(!edge.isFlooded() && !n.getType().equals("#"))
+					//only flood nodes that are not already flooded, are of a known type and are not walls
+					if(!edge.isFlooded() && !edge.getType().equals("#") && !edge.getType().equals("?"))
 					{
 						edge.setFlooded(true);
 						floodStack.push(edge);
@@ -243,9 +238,9 @@ class Player
 		int largestManhatten = 0;
 		
 		for(Node n: maze)
-		{
-			String type = n.getType();
-			if(!type.equals("?") && !type.equals("#") && n.isFlooded())
+		{			
+			//only consider nodes that are known, unvisited & walkable
+			if(n.getType().equals(".") && n.isFlooded() && !n.isVisited())
 			{
 				int manhattenX = Math.abs(n.getX() - startingPosition.getX());
 				int manhattenY = Math.abs(n.getY() - startingPosition.getY());
@@ -300,9 +295,9 @@ class Player
 			
 			for(Node neighbour: subjectNode.getNeighbours())
 			{
-				//If it is not walkable or if it is on the closed list, ignore it. 
+				//If it is not walkable or if it is on the closed list or it is of unknown type, ignore it. 
 				 
-				if(neighbour.isFlooded() && !closed.contains(neighbour))
+				if(neighbour.isFlooded() && !closed.contains(neighbour) && !neighbour.getType().equals("?"))
 				{
 					// Otherwise do the following.
 					//If it isn’t on the open list, add it to the open list.
@@ -365,6 +360,30 @@ class Player
 		 Collections.reverse(shortestPath);
 		 //remove the current position, which will now be at the start of the list
 		 shortestPath.remove(currentPosition);
+		 
+		 /*
+		  * need to check that the shortestPath list isn't now empty - this can happen if player has already
+		  * reached an extreme "furthest distance" and this is repeatedly selected as target. 
+		  * In these circumstances, one practical option is to select a neighbouring cell that has not 
+		  * been visited and add it to the path
+		  * 
+		  * Once this situation occurs, the findTarget routine may subsequently select the same
+		  * troublesome "furthest distance" node that caused the problem in the first place
+		  * solution may well be to make the furthest distance node only unvisited nodes. 
+		  *
+		  
+		  if(shortestPath.size() == 0)
+		  {
+			  for(Node n: currentPosition.getNeighbours())
+			  {
+				  if(!n.isVisited() && n.isFlooded())
+				  {
+					  shortestPath.add(n);
+					  break;
+				  }
+			  }
+			  System.err.println("Overiding target and substituting: [" + shortestPath.get(0).getX() + " , " + shortestPath.get(0).getY() + " ]");
+		  }*/
 		 
 		 System.err.println("My shortest path to the target is: ");
 		 for(Node n:shortestPath)
@@ -429,6 +448,7 @@ class Node implements Comparable<Node>
 	private int gCost; //the movement cost to move from the starting point A to this node on the grid, following the path generated to get there. 
 	private int hValue; //the estimated movement cost to move from this node to the final target destination.
 	private boolean flooded = false; // set to true if impacted by a call to floodfill
+	private boolean visited = false;
 	private Node parent;
 	List<Node> neighbours = new ArrayList<Node>();
 	
@@ -452,7 +472,8 @@ class Node implements Comparable<Node>
 		 flooded = true;
 		 for(Node n: neighbours)
 		 {
-			 if(!n.isFlooded() && !n.getType().equals("#"))
+			//only flood nodes that are not already flooded, are of a known type and are not walls
+			 if(!n.isFlooded() && !n.getType().equals("#") && !n.getType().equals("?"))
 			 {
 				 n.flood();
 			 }
@@ -511,6 +532,11 @@ class Node implements Comparable<Node>
 		return parent;
 	}
 	
+	public boolean isVisited()
+	{
+		return visited;
+	}
+	
 	//setters for non-final instance variables
 	public void setType(String t)
 	{
@@ -540,6 +566,11 @@ class Node implements Comparable<Node>
 	public void setParent(Node n)
 	{
 		parent = n;
+	}
+	
+	public void setVisited(boolean b)
+	{
+		visited = b;
 	}
 	
 	//getter and setter for neighbours list
