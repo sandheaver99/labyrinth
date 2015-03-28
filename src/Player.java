@@ -21,6 +21,7 @@ class Player
 	private Node controlRoom;
 	private Node target;
 	private boolean controlVisited = false;
+	private List<Node> unknownNodes = new ArrayList<Node>();
 
     public static void main(String args[])
     {
@@ -50,7 +51,9 @@ class Player
 				int id = col + (row*columns);
 				maze.add(new Node("?", col, row, id));				
 			}
-		}
+		}		
+		
+		
 	}
 	
 	private void setNodeNeighbours()
@@ -95,7 +98,7 @@ class Player
         // game loop
         while (true)
         {
-			turnNumber++;
+			turnNumber++;			
             readMaze();
             chooseTarget();
             
@@ -141,6 +144,7 @@ class Player
 				}
 				//update the location's node's type
 				maze.get(mazeIndex).setType(c);
+				
 				mazeIndex++;
 			}				
         }
@@ -152,6 +156,23 @@ class Player
 			controlVisited = true;
 		}
 		currentPosition.setVisited(true);
+		
+		//update unknown list
+		unknownNodes.clear();
+		for(Node n: maze)
+		{
+			//don't add the corners (neighbours aren't reachable)
+			int index = n.getId();
+			if(index == 0 || index == columns-1 || index == rows-1 || index == (rows*columns)-1)
+			{
+				continue;
+			}
+			else if(n.getType().equals("?"))
+			{
+				unknownNodes.add(n);
+			}
+		}
+		 
 	}
 	
 	private void chooseTarget()
@@ -159,6 +180,12 @@ class Player
 		System.err.println("Beginning maze flood routine ...");
 		floodMaze();
 		System.err.println("Maze flood routine completed");
+		
+		System.err.println(unknownNodes.size() + " items in the unknown list");
+		if(unknownNodes.size() == 1)
+		{
+			System.err.println("Last unknown node is at [" + unknownNodes.get(0).getX() + " , " + unknownNodes.get(0).getY() + "]");
+		}
 		
 		//if control is visited, target = entry and path is known and accessible
 		if(controlVisited)
@@ -179,47 +206,21 @@ class Player
 			
 			else if(controlRoom.isFlooded())
 			{
-				//if there is time, explore
-				if(turnNumber < TURN_LIMIT/2)
+				//if there are unknown nodes, explore (changed to 1 rather than zero as a cheat round test 8)
+				if(unknownNodes.size() > 1 )
 				{
-					System.err.println("The control room is known and accesible, but there is time to explore");
-					//set target to any neighbour that is unvisited					
-					Node furthest = currentPosition;
-					int largestManhatten = 0;
-					for(Node n: currentPosition.getNeighbours())
+					//find the first reachable unknown node
+					for(Node n: unknownNodes)
 					{
-						//System.err.println(n.isVisited() + " , " + n.isFlooded() + " , " + n.getType());						
-						
-						if(!n.isVisited() && n.isFlooded() && n.getType().equals("."))
+						for(Node m: n.getNeighbours())
 						{
-							int manhattenX = Math.abs(n.getX() - controlRoom.getX());
-							int manhattenY = Math.abs(n.getY() - controlRoom.getY());
-							int manhatten = manhattenX + manhattenY;
-							if(manhatten > largestManhatten)
+							if(m.isFlooded())
 							{
-								largestManhatten = manhatten;
-								furthest = n;
+								target = m;
+								return;
 							}
-							
-							
-							System.err.println("Found an unvisited neighbour");
-							target = furthest;	
-							
-							//need to ensure you pick the neighbor that is unvisited and furthest away from the control room
-						}					
-											
-					}
-					
-					//if a suitable neighbour was found, return
-					if(!furthest.equals(currentPosition))
-					{
-						return;
-					}
-					
-					//if all neighbours are visited, head back towards the control room, until a new unvisited node is found
-					target = controlRoom;
-					return;
-					
+						}
+					}													
 				}
 				//if time is short, head back towards the control room.
 				else
@@ -229,24 +230,40 @@ class Player
 				}
 			}
 			/*
-			 * otherwise, target = furthest known, unvisited area 
+			 * otherwise, target = next reachable unkown node
 			 * 			 
 			 */
 			 
 			 else
 			 {
-				 System.err.println("Searching for furthest known, unvisited node ....");
-				 target = findFurthestKnownNode();
-				 System.err.println("Search completed");
-				 return;
+				 //find the first reachable unknown node
+					for(Node n: unknownNodes)
+					{
+						for(Node m: n.getNeighbours())
+						{
+							if(m.isFlooded())
+							{
+								target = m;
+								return;
+							}
+						}
+					}	
 			 }
 		} 
 		else
 			 {
-				 System.err.println("Searching for furthest known, unvisited node ....");
-				 target = findFurthestKnownNode();
-				 System.err.println("Search completed");
-				 return;
+				 //find the first reachable unknown node
+					for(Node n: unknownNodes)
+					{
+						for(Node m: n.getNeighbours())
+						{
+							if(m.isFlooded())
+							{
+								target = m;
+								return;
+							}
+						}
+					}	
 			 }
 	}		
 	
