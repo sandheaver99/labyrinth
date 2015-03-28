@@ -13,6 +13,7 @@ class Player
 	private int currentX;
 	private int currentY;
 	private int turnNumber = 0;
+	private final int TURN_LIMIT = 1200;
 	
 	private List<Node> maze = new ArrayList<Node>();		
 	private Node startingPosition;
@@ -161,26 +162,75 @@ class Player
 		
 		//if control is visited, target = entry and path is known and accessible
 		if(controlVisited)
-		{
+		{			
 			target= startingPosition;
 			return;
 		}
 		
-		//if control is not visited but already the target, we make no change to the target, otherwise if control room is known and accessible, we make it the target. 
+		//if control is not visited but already the target, we make no change to the target, otherwise if control room is known and accessible, we 
+		//consider whether to explore or make it the target. 
 		else if(controlRoom != null) 
-		{
+		{						
 			if(target.equals(controlRoom))
 			{
+				System.err.println("Target already set to control room");
 				return;
 			}
+			
 			else if(controlRoom.isFlooded())
 			{
-				target = controlRoom;
-				return;
+				//if there is time, explore
+				if(turnNumber < TURN_LIMIT/2)
+				{
+					System.err.println("The control room is known and accesible, but there is time to explore");
+					//set target to any neighbour that is unvisited					
+					Node furthest = currentPosition;
+					int largestManhatten = 0;
+					for(Node n: currentPosition.getNeighbours())
+					{
+						//System.err.println(n.isVisited() + " , " + n.isFlooded() + " , " + n.getType());						
+						
+						if(!n.isVisited() && n.isFlooded() && n.getType().equals("."))
+						{
+							int manhattenX = Math.abs(n.getX() - controlRoom.getX());
+							int manhattenY = Math.abs(n.getY() - controlRoom.getY());
+							int manhatten = manhattenX + manhattenY;
+							if(manhatten > largestManhatten)
+							{
+								largestManhatten = manhatten;
+								furthest = n;
+							}
+							
+							
+							System.err.println("Found an unvisited neighbour");
+							target = furthest;	
+							
+							//need to ensure you pick the neighbor that is unvisited and furthest away from the control room
+						}					
+											
+					}
+					
+					//if a suitable neighbour was found, return
+					if(!furthest.equals(currentPosition))
+					{
+						return;
+					}
+					
+					//if all neighbours are visited, head back towards the control room, until a new unvisited node is found
+					target = controlRoom;
+					return;
+					
+				}
+				//if time is short, head back towards the control room.
+				else
+				{
+					target = controlRoom;
+					return;
+				}
 			}
 			/*
 			 * otherwise, target = furthest known, unvisited area 
-			 * 
+			 * 			 
 			 */
 			 
 			 else
@@ -239,7 +289,7 @@ class Player
 		
 		for(Node n: maze)
 		{			
-			//only consider nodes that are known, unvisited & walkable
+			//only consider nodes that are known, unvisited , walkable & not the control room
 			if(n.getType().equals(".") && n.isFlooded() && !n.isVisited())
 			{
 				int manhattenX = Math.abs(n.getX() - startingPosition.getX());
